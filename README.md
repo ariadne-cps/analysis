@@ -28,7 +28,7 @@ cmake --build build --parallel --target everything
 ctest --test-dir build --output-on-failure
 ```
 
-See [the tutorial](tutorial/README.md) for a small C++ reachability example.
+See [the tutorial](tutorial/README.md) for a small C++ safety-verification example.
 
 ## Python
 
