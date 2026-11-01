@@ -1,18 +1,23 @@
 # Reasoning tutorial
 
-The C++ tutorial verifies an infinite-time safety property for a simple
-one-dimensional contraction, `x' = 0.375 - x`. Starting from
-`0.3125 <= x <= 0.34375`, it uses `verify_safety` to prove that all
-reachable states remain in `-2 <= x <= 2`. The attracting equilibrium
-lies inside a grid cell, allowing the chain-reachability computation to
-stabilise quickly.
+Both C++ and Python tutorials perform **infinite-time safety verification**
+using `verify_safety` on the same one-dimensional contracting vector field:
 
-The program checks the safety certificate and fails if safety cannot be
-proved (an indeterminate result is not a proof of unsafety). Unlike a
-finite-time `upper_reach` computation, this demonstrates a safety
-verification procedure rather than just generating a reachable set.
+- Dynamics: `x' = 3/8 - x` (attracting equilibrium `x = 3/8`).
+- Initial states: `5/16 <= x <= 11/32`.
+- Safe region: `-2 <= x <= 2`.
+- Grid fineness: `2`.
 
-After installing the library, configure the standalone tutorial:
+The equilibrium is inside a grid cell, so the chain-reachability computation
+can stabilise without an expensive expansion of the reachable grid. Each
+tutorial checks that the returned certificate **proves** safety for all time,
+and fails for indeterminate results rather than claiming they are unsafe.
+Unlike `upper_reach`, `verify_safety` attempts a safety proof, not merely a
+finite-time reachable-set approximation.
+
+## C++ tutorial
+
+After installing the library:
 
 ```bash
 cmake -S tutorial -B tutorial/build -DCMAKE_PREFIX_PATH="$PWD/install"
@@ -20,13 +25,22 @@ cmake --build tutorial/build --parallel
 ./tutorial/build/tutorial_reasoning
 ```
 
-The Python tutorial shows the registered Reasoning classes in the composed
-`pyariadne` module:
+## Python tutorial
+
+Point `PYTHONPATH` to the installed `pyariadne` extension and configure the
+dynamic library search path if needed, then run:
 
 ```bash
 python tutorial/tutorial_reasoning.py
 ```
 
-Unlike the C++ program, the Python example currently checks bindings rather
-than performing safety verification; full computational parity is not yet
-verified.
+The Python tutorial constructs the field, integrator, evolver, initial and
+safe sets, and calls `ContinuousReachabilityAnalyser.verify_safety` directly.
+It reads `SafetyCertificate.proved_safe()` (which is true only for a proven
+safety result) and `chain_reach_size()` for the computed certificate.
+
+The Python tutorial is also registered as a CTest test, alongside the existing
+binding smoke test, so CI exercises the safety computation. The
+`HybridReachabilityAnalyser` Python name is currently only a placeholder
+without constructors or analysis methods; hybrid analysis is not demonstrated
+by these tutorials.

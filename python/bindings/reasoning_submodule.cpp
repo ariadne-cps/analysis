@@ -22,6 +22,14 @@ template<class RA> Void export_safety_certificate(pybind11::module& module, cons
     pybind11::class_<SafetyCertificateType> safety_certificate_class(module,name);
     safety_certificate_class.def(pybind11::init<ValidatedSierpinskian,StorageType,StorageType >());
     safety_certificate_class.def_readonly("is_safe", &SafetyCertificateType::is_safe);
+    // Sierpinskian safety is three-valued: an indeterminate result is not
+    // a proof.  Provide an explicit Python bool for certified safety.
+    safety_certificate_class.def("proved_safe", [](SafetyCertificateType const& certificate) {
+        return definitely(certificate.is_safe);
+    });
+    safety_certificate_class.def("chain_reach_size", [](SafetyCertificateType const& certificate) {
+        return certificate.chain_reach_set.size();
+    });
     safety_certificate_class.def_readonly("chain_reach_set", &SafetyCertificateType::chain_reach_set);
     safety_certificate_class.def_readonly("safe_set", &SafetyCertificateType::safe_set);
 }
