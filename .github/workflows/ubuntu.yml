@@ -1,29 +1,100 @@
 name: Ubuntu
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.config.name }} [${{ matrix.build_type }}]
+    runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
-        build_type: [Debug, Release]
-        compiler: [clang++-16, g++-13]
+        build_type: [Release, Debug]
+        config:
+          - { name: "Ubuntu 24.04 x86 Clang 16", os: ubuntu-24.04, cxx: "clang++-16", pkg: "clang-16" }
+          - { name: "Ubuntu 24.04 arm Clang 16", os: ubuntu-24.04-arm, cxx: "clang++-16", pkg: "clang-16" }
+          - { name: "Ubuntu 24.04 x86 GCC 13", os: ubuntu-24.04, cxx: "g++-13", pkg: "g++-13", libstdcxx_debug: true }
+          - { name: "Ubuntu 24.04 arm GCC 13", os: ubuntu-24.04-arm, cxx: "g++-13", pkg: "g++-13", libstdcxx_debug: true }
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build clang-16 g++-13 pkg-config
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DBUILD_PYTHON_BINDINGS=ON -DPYTHON_ENFORCE_TESTS=ON
-      - name: Build
-        run: cmake --build build --parallel 4 --target everything
-      - name: Test
-        run: ctest --test-dir build --output-on-failure --parallel 4
+    - uses: actions/checkout@v7
+
+    - name: Set up sccache
+      uses: mozilla-actions/sccache-action@v0.0.11
+      with:
+        version: "v0.18.0"
+
+    - uses: actions/setup-python@v7
+      with:
+        python-version: "3.13"
+
+    - name: Get Linux Concurrency
+      if: runner.os == 'Linux'
+      run: echo "NPROC=$(nproc)" >> "$GITHUB_ENV"
+
+    - name: Set Up Linux Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build pkg-config ${{ matrix.config.pkg }}
+
+    - name: Create Build Environment
+      run: cmake -E make_directory ${{ runner.workspace }}/build
+
+    - name: Configure CMake
+      env:
+        CXXFLAGS: ${{ matrix.build_type == 'Debug' && matrix.config.libstdcxx_debug && '-D_GLIBCXX_DEBUG' || '' }}
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -G Ninja -DWARNINGS_AS_ERRORS=ON -DBUILD_PYTHON_BINDINGS=ON -DPYTHON_ENFORCE_TESTS=ON
+
+    - name: Build Reasoning
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake --build . --parallel "$NPROC" --target ariadne-reasoning pyariadne
+
+    - name: Build C++ tests (Debug only)
+      if: matrix.build_type == 'Debug'
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake --build . --parallel "$NPROC" --target tests
+
+    - name: Test reasoning and Python
+      if: matrix.build_type == 'Debug'
+      working-directory: ${{ runner.workspace }}/build
+      run: ctest -j "$NPROC" --output-on-failure
+
+
+    - name: Install Reasoning
+      if: matrix.build_type == 'Release'
+      working-directory: ${{ runner.workspace }}/build
+      run: cmake --install . --prefix ${{ runner.workspace }}/install
+
+    - name: Run installed Python Reasoning tutorial
+      if: matrix.build_type == 'Release'
+      working-directory: ${{ github.workspace }}/tutorial
+      env:
+        PYTHONPATH: ${{ runner.workspace }}/install/lib/python3.13/site-packages
+        LD_LIBRARY_PATH: ${{ runner.workspace }}/install/lib
+        DYLD_LIBRARY_PATH: ${{ runner.workspace }}/install/lib
+      run: |
+        python -c "import os, pathlib, pyariadne; p=pathlib.Path(pyariadne.__file__).resolve(); root=pathlib.Path(os.environ['PYTHONPATH']).resolve(); assert p.is_relative_to(root), (p,root)"
+        python tutorial_reasoning.py
+
+    - name: Prepare C++ Reasoning tutorial
+      if: matrix.build_type == 'Release'
+      run: cmake -E copy_directory "$GITHUB_WORKSPACE/tutorial" "${{ runner.workspace }}/tutorial_reasoning"
+
+    - name: Run installed C++ Reasoning tutorial
+      if: matrix.build_type == 'Release'
+      working-directory: ${{ runner.workspace }}/tutorial_reasoning
+      run: |
+        cmake -S . -B build -DCMAKE_PREFIX_PATH="${{ runner.workspace }}/install" -DCMAKE_CXX_COMPILER=${{ matrix.config.cxx }} -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -G Ninja
+        cmake --build build --parallel "$NPROC"
+        export LD_LIBRARY_PATH="${{ runner.workspace }}/install/lib:${LD_LIBRARY_PATH:-}"
+        export DYLD_LIBRARY_PATH="${{ runner.workspace }}/install/lib:${DYLD_LIBRARY_PATH:-}"
+        ./build/tutorial_reasoning
