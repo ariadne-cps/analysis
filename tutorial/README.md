@@ -39,8 +39,12 @@ safe sets, and calls `ContinuousReachabilityAnalyser.verify_safety` directly.
 It reads `SafetyCertificate.proved_safe()` (which is true only for a proven
 safety result) and `chain_reach_size()` for the computed certificate.
 
-The Python tutorial is also registered as a CTest test, alongside the existing
-binding smoke test, so CI exercises the safety computation. The
-`HybridReachabilityAnalyser` Python name is currently only a placeholder
-without constructors or analysis methods; hybrid analysis is not demonstrated
-by these tutorials.
+The Python tutorial is also registered as a CTest test. A separate Python
+test builds a single-mode hybrid automaton, constructs a `GeneralHybridEvolver`
+and `HybridReachabilityAnalyser`, computes a finite-time reach set, and
+requests an infinite-time `HybridSafetyCertificate`.
+
+The hybrid bindings also expose `HybridBoundedConstraintSet`,
+`HybridReachabilityAnalyserConfiguration`, and the main analyser methods.
+A bounded hybrid constraint set supplies both the compact initial set and the
+open safe set for `verify_safety`.
