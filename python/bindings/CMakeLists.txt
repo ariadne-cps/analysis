@@ -9,5 +9,5 @@ target_link_libraries(pyariadne-reasoning-submodule-obj PRIVATE
 set_target_properties(pyariadne-reasoning-submodule-obj PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_library(pyariadne-reasoning INTERFACE)
 target_sources(pyariadne-reasoning INTERFACE $<TARGET_OBJECTS:pyariadne-reasoning-submodule-obj>)
-target_link_libraries(pyariadne-reasoning INTERFACE pyariadne-evolution)
+target_link_libraries(pyariadne-reasoning INTERFACE pyariadne-evolution pyariadne-smt pyariadne-sat)
 ariadne_add_python_module(NAME reasoning MODULE_SOURCE reasoning_module.cpp)
